@@ -1,0 +1,140 @@
+---
+title: "GEE clasificacion no Super"
+author: "Gorky Florez Castillo"
+date: "19/8/2021"
+output: 
+  flexdashboard::flex_dashboard:
+    theme: cerulean
+---
+
+```{r setup, include=FALSE}
+#-------------------------------- Librerias---------------------
+library(googledrive)
+library(rgee)
+library(mapedit)
+library(tibble)
+library(sf)
+library(cptcity)
+library(tidyverse)
+library(sp)
+library(leaflet.extras2)
+library(magick)
+# remotes::install_github("r-earthengine/rgeeExtra")
+library(rgeeExtra)
+library(raster)
+library(googleCloudStorageR)
+# ---------------------------------------------------------------
+# Iniciamos nuestra cuenta en las credenciales de GEE
+ee_Initialize("gflorezc", drive = T, gcs = TRUE)
+
+# Area de interes la ciudad de puerto maldonado 
+Puerto_MDD<-ee$FeatureCollection("users/gflorezc/Puerto_Mald") # LLamamos de la coleccion de GEE
+
+# ---------------------------------------------------------------
+ColeccionSentinel = ee$ImageCollection("COPERNICUS/S2_SR")$    # Seleccion del satelite
+            filterBounds (Puerto_MDD)$                         # Area de interes
+            filterDate ("2020-07-01", "2020-07-30")$           # Periodo del año 
+            filterMetadata("CLOUDY_PIXEL_PERCENTAGE", "Less_Than", 10) # Porcentaje de nuves
+ee_get_date_ic(ColeccionSentinel)                              # Coleccion de las imagenes
+# Cortado y composicion de bandas
+ZonaAOI =  ee$Image('COPERNICUS/S2_SR/20200720T144729_20200720T145606_T19LDG')$ # Seleccion del ID
+            clip(Puerto_MDD)%>%                                #Corte con el area   
+            ee$Image$select(c("B6","B5", "B4"))                # Selecion de las capas 
+viz <-list(min = 450, max =3500, gamma = 1.2)                  # Parametros 
+# ------------------- Clasificacion no supervizada
+# Generar el número cluster y entrenear 
+trainig   <- ZonaAOI$sample(region = Puerto_MDD,               # El ares de interes
+                          scale= 10,                           # Escala o niveles 
+                          numPixels =1000)                     # Numero de pixeles
+clusterer <- ee$Clusterer$wekaKMeans(10)$train(trainig)        # Numero de cluster 
+
+result    <- ZonaAOI$cluster(clusterer)                        # Resultados de la clasificacion
+```
+
+Google Earth Engine en R - RGB - kmedias Puerto Mladonado 
+===================================== 
+
+Column {data-width=550}
+-----------------------------------------------------------------------
+
+### Mapa de composicion de bandas RGB para Puerto maldonado 
+```{r map}
+Map$centerObject(Puerto_MDD) 
+Map$addLayer(ZonaAOI,visParams = viz, "RGB") 
+```
+Column {data-width=450}
+-----------------------------------------------------------------------
+### Mapa de clasificada Kmedias
+
+```{r map1}
+Map$setCenter(-69.18959, -12.60372, 12)                                      # Llamamos al Objeto 
+Map$addLayer(eeObject = result$randomVisualizer(),             # Visualizamos la clasificacion
+             name= "clusters")
+```
+
+Compacion entre RGB y Kmedias 
+===================================== 
+
+Column {data-width=550}
+-----------------------------------------------------------------------
+### Puerto Maldonado 
+```{r map 3}
+Map$setCenter(-69.18959, -12.60372, 12)                                      # Llamamos al Objeto 
+Map$addLayer(eeObject = result$randomVisualizer(),             # Visualizamos la clasificacion
+             name= "clusters")  |
+  Map$addLayer(ZonaAOI,visParams = viz, "RGB") 
+```
+
+Information {data-orientation=rows data-icon="fa-info-circle"}
+===================================== 
+
+### Información de datos
+
+Los datos utilizados aquí provienen de INCREMENTO DE TEMPERATURA DIURNA EN LA SELVA (SENAMHI), que detalla el incremento de la temperatura en el Peru. En agosto. Estos datos se debe tratar con precaución.
+
+La metodología para la recopilación de datos se puede ver [aquí] (https://www.senamhi.gob.pe/?p=aviso-meteorologico-detalle-prueba&a=2021&b=2661&c=00&d=SENA).
+
+El objetivo princial de la presentacion es brindar las herramientas necesarias para poder representar datos cuantitativos y cualitativo en mapas vectoriales y raster. 
+
+Este panel se desarrolló el 08 de agosto del 2021 y, por lo tanto, es una instantánea de los datos en esta simulacion. 
+
+La información geográfica en cada distrito está distribuida por provincias y departamentos en el Perú.
+
+
+
+### NOTA BIOGRÁFICA
+
+Gorky florez Castillo, nacido en el Departamento del Cusco, Provincia de la Convención, Distrito de Santa Ana el 07 de agosto de 1997. Curso sus estudios primarios en la Institución Educativa Juan de la Cruz Monte Salas y los secundarios en el “Glorioso colegio Emblemático Manco II”, de la ciudad de Quillabamba. 
+
+Bachiller con mención en la Carrera Profesional de Ingeniería Forestal y Medio Ambiente de la Universidad Nacional Amazónica de Madre de Dios el año, desde el 23 de diciembre del 2020. Participación activa en Proyectos de investigación u otras actividades que involucren de nuestros recursos Naturales, a la conservación, a la educación y conciencia ambiental, de esta forma contribuir al desarrollo del departamento de Madre de Dios y mi país.
+
+Realizo un artículo de investigación de caracterización morfológica y estructura poblacional de Euterpe precatoria (Arecaceae) en dos tipos de bosque (bosque de tierra firme y bosque inundable publicado en la revista ecuatoriana Bosques Latitud Cero (Florez-castillo, Nieto-ramos y Garate-quispe 2020).
+
+
+
+### Otra información
+Que es  Google Earth Engine
+Google Earth Engine es una plataforma basada en la nube que permite a los usuarios tener un fácil acceso a un archivo de datos de teledetección a escala de petabytes y ejecutar análisis geoespaciales en la infraestructura de Google. Actualmente, Google ofrece soporte solo para Python y JavaScript. Rgee llenará el vacío comenzando a brindar apoyo a R. A continuación, encontrará la comparación entre la sintaxis de rgee y las dos bibliotecas cliente compatibles con Google.
+
+El repositorio de GitHub y el código subyacente de este panel se pueden encontrar aquí. [here]()
+
+Este dashbaord se desarrolló utilizando [R Studio] (https://www.rstudio.com/) y los siguientes paquetes:
+
+* [RMarkdown](https://rmarkdown.rstudio.com/) para análisis reproducibles en documentos de calidad
+*  [flexdashbaord](https://rmarkdown.rstudio.com/flexdashboard/) para formatear en RMarkdown
+* [DT](https://rstudio.github.io/DT/) para tablas interactivas
+* [crosstalk](https://rstudio.github.io/crosstalk/) para widgets html interactivos en RMarkdown
+
+
+Se presenta otros manuales y ejemplos del uso de Google Earth Engine en RStudio
+
+* [Aviso de friaje - (SENAMHI)](https://gorkyflorez.github.io/Aviso_Friaje_MDD/) 
+*  [NDVI de Yungay](https://gorkyflorez.github.io/Google_Earth_Engine_RStudio_/) 
+* [Calcule la tendencia de las luces nocturnas ](https://gorkyflorez.github.io/luces_nocturnas_GEE/) 
+* [Perdida de la cobertura boscosa en la cuenca chonta](https://gorkyflorez.github.io/Analisis_cambio_cobertura_boscosa_microcuenca_chonta/) 
+
+* [INCREMENTO DE TEMPERATURA DIURNA EN LA SELVA](https://gorkyflorez.github.io/Aviso_SENAMHI_155/) 
+*  [NDVI de Yungay](https://gorkyflorez.github.io/Google_Earth_Engine_RStudio_/) 
+* [Índice de agua de diferencia normalizada Sentinel-2 (NDWI)](https://gorkyflorez.github.io/Google_Earth_Engine_NDWI_Dhaka/) 
+* [NDVI en Git de Madre de Dios 2013-2014](https://gorkyflorez.github.io/GEE_NDVI_MDD_Arequi/) 
+* [Modelo digital de elevación](https://gorkyflorez.github.io/GEE_DEM/) 
